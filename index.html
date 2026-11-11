@@ -189,7 +189,7 @@ const normUrl=v=>{v=v.trim();if(!v)return"";if(!/^https?:\/\//i.test(v))v="https
 const rd=(k,f)=>{try{const v=JSON.parse(localStorage.getItem(k));return Array.isArray(v)?v:f}catch(_){return f}};
 const wr=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(_){return false}};
 let tT;
-function toast(t,err){const e=$("#toast");e.textContent=t;e.classList.toggle("err",!!err);e.classList.add("show");clearTimeout(tT);tT=setTimeout(()=>e.classList.remove("show"),3400)}
+function toast(t,err,ms){const e=$("#toast");e.textContent=t;e.classList.toggle("err",!!err);e.classList.add("show");clearTimeout(tT);tT=setTimeout(()=>e.classList.remove("show"),ms||3400)}
 
 /* Warna kartu diambil dari warna dominan gambar */
 function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2;let h=0,s=0;if(d){s=d/(1-Math.abs(2*l-1));h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360}return{h,s,l}}
@@ -369,12 +369,17 @@ function openAuto(note){
   $("#msgA").textContent=note||"Klik Auto untuk membuka semua link ini sebagai tab baru.";
   dA.showModal();
 }
+let pend=[],pT;
 function runAuto(){
   if(lpFired){lpFired=false;return}
   if(!autoLinks.length)return openAuto("Belum ada link. Isi tabel ini lalu simpan.");
-  let blocked=0;
-  autoLinks.forEach(u=>{const w=window.open(u,"_blank");if(w){try{w.opener=null}catch(_){}}else blocked++});
-  blocked?toast(`${blocked} tab diblokir browser. Izinkan pop-up untuk halaman ini, lalu klik Auto lagi.`,1):toast(`${autoLinks.length} tab dibuka.`);
+  const list=pend.length?pend:autoLinks;
+  pend=[];
+  list.forEach(u=>{const w=window.open(u,"_blank");if(w){try{w.opener=null}catch(_){}}else pend.push(u)});
+  clearTimeout(pT);
+  if(!pend.length)return toast(`${list.length} tab dibuka.`);
+  pT=setTimeout(()=>pend=[],40000);
+  toast(`${list.length-pend.length} tab terbuka, ${pend.length} diblokir browser. Klik Auto lagi untuk membuka sisanya, atau izinkan pop-up untuk situs ini agar semua terbuka sekaligus.`,1,9000);
 }
 autoBtn.onclick=runAuto;
 autoBtn.addEventListener("contextmenu",e=>{e.preventDefault();openAuto()});
@@ -390,7 +395,7 @@ $("#fA").onsubmit=e=>{
     if(v)out.push(v);else if(v===null&&!bad)bad=inp;
   });
   if(bad){const m=$("#msgA");m.textContent="Ada link yang tidak valid.";m.className="msg err";bad.focus();return}
-  autoLinks=out;wr(AK,out);led();closeDlg(dA);
+  autoLinks=out;pend=[];wr(AK,out);led();closeDlg(dA);
   toast(out.length?`${out.length} link tersimpan untuk Auto.`:"Daftar link Auto dikosongkan.");
 };
 
