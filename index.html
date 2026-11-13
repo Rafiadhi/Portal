@@ -38,7 +38,7 @@ body{margin:0;height:100%;overflow:hidden;background:radial-gradient(ellipse at 
 .stage.drag{cursor:grabbing}
 .none{position:absolute;inset:0;display:grid;place-content:center;margin:0;text-align:center;color:var(--mut);font-size:12px}
 
-.card{position:absolute;left:50%;top:50%;display:block;height:calc(var(--sh)*.9);width:calc(var(--sh)*.6);container-type:inline-size;border-radius:calc(var(--sh)*.06);background:var(--c);color:var(--ink);text-decoration:none;will-change:transform;-webkit-user-drag:none}
+.card{--c:#fff;--c2:#f3f3f1;--c3:#e2e2df;--ink:#0d0d0d;position:absolute;left:50%;top:50%;display:block;height:calc(var(--sh)*.9);width:calc(var(--sh)*.6);container-type:inline-size;border-radius:calc(var(--sh)*.06);background:var(--c);color:var(--ink);text-decoration:none;will-change:transform;-webkit-user-drag:none}
 .in{position:relative;height:100%;padding:5cqw;display:flex;flex-direction:column}
 .lvl{position:absolute;z-index:2;top:5cqw;left:5cqw;width:56%;padding:2.2cqw 4cqw 2cqw 0;background:var(--c);clip-path:polygon(0 0,100% 0,100% 45%,90% 100%,0 100%)}
 .bar{display:block;height:3.4cqw;border-radius:1cqw;overflow:hidden;background:color-mix(in srgb,var(--ink) 18%,transparent)}
@@ -105,6 +105,8 @@ dialog .device{width:min(460px,94vw);max-height:94dvh;overflow:auto}
 .rm{width:34px;height:34px}
 .mini{margin-top:10px;padding:8px 12px;color:var(--or)}
 .rm:hover,.mini:hover{border-color:var(--or);color:var(--or)}
+.data{display:flex;gap:8px;margin-top:10px}
+.data .mini{flex:1;margin-top:0}
 
 .toast{position:fixed;z-index:99;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));max-width:min(92vw,420px);padding:10px 16px;background:#000;border:2px solid var(--cream);border-radius:12px;font-size:12px;text-align:center;opacity:0;transform:translate(-50%,20px);pointer-events:none;transition:opacity .25s,transform .25s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -160,8 +162,9 @@ dialog .device{width:min(460px,94vw);max-height:94dvh;overflow:auto}
           </div>
         </div>
       </div>
-      <p class="msg" id="msg" role="status">Warna kartu diambil dari gambar yang kamu pilih.</p>
+      <p class="msg" id="msg" role="status">Pilih gambar, isi nama, dan link.</p>
       <div class="btns"><button class="submit alt" type="button" data-close>Batal</button><button class="submit" type="submit">Tambah kartu</button></div>
+      <div class="data"><button class="mini" id="exp" type="button" title="Simpan semua kartu dan link Auto ke satu file">Ekspor data</button><button class="mini" id="imp" type="button" title="Gabungkan kartu dari file hasil ekspor">Impor data</button><input id="impFile" type="file" accept=".json,application/json" hidden></div>
     </div>
   </form>
 </dialog>
@@ -191,41 +194,15 @@ const wr=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch
 let tT;
 function toast(t,err,ms){const e=$("#toast");e.textContent=t;e.classList.toggle("err",!!err);e.classList.add("show");clearTimeout(tT);tT=setTimeout(()=>e.classList.remove("show"),ms||3400)}
 
-/* Warna kartu diambil dari warna dominan gambar */
-function rgb2hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2;let h=0,s=0;if(d){s=d/(1-Math.abs(2*l-1));h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h=(h*60+360)%360}return{h,s,l}}
-function hsl2rgb(h,s,l){const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return l-a*Math.max(-1,Math.min(k-3,9-k,1))};return[f(0),f(8),f(4)]}
-function dominant(im){
-  const S=48,c=document.createElement("canvas");c.width=c.height=S;
-  const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(im,0,0,S,S);
-  const px=x.getImageData(0,0,S,S).data,b={};
-  for(let i=0;i<px.length;i+=4){
-    if(px[i+3]<128)continue;
-    const r=px[i],g=px[i+1],bl=px[i+2],mx=Math.max(r,g,bl),mn=Math.min(r,g,bl);
-    const l=(mx+mn)/510,s=mx===mn?0:(mx-mn)/(255-Math.abs(mx+mn-255));
-    const w=(.1+s)*(l<.12||l>.93?.15:1),k=(r>>5)<<6|(g>>5)<<3|(bl>>5);
-    const o=b[k]||(b[k]={w:0,r:0,g:0,b:0});
-    o.w+=w;o.r+=r*w;o.g+=g*w;o.b+=bl*w;
-  }
-  let best=null;
-  for(const k in b)if(!best||b[k].w>best.w)best=b[k];
-  return best?rgb2hsl(best.r/best.w,best.g/best.w,best.b/best.w):null;
-}
-function theme({h,s,l}){
-  const s2=s<.12?s:clamp(s,.55,.95),l2=clamp(l,.44,.64),lin=v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4;
-  const [r,g,b]=hsl2rgb(h,s2,l2),L=.2126*lin(r)+.7152*lin(g)+.0722*lin(b),p=v=>Math.round(v*100)+"%",H=Math.round(h);
-  return{c:`hsl(${H} ${p(s2)} ${p(l2)})`,c2:`hsl(${H} ${p(s2)} ${p(l2-.04)})`,c3:`hsl(${(H+348)%360} ${p(Math.min(1,s2+.05))} ${p(Math.max(.12,l2-.17))})`,ink:L>.19?`hsl(${H} ${p(Math.min(s2,.5))} 7%)`:`hsl(${H} 30% 96%)`};
-}
-const hue=n=>[...n].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7)%360;
-
 /* Data kartu: tersimpan di browser ini */
 const KEY="koleksi-kartu-v1",AK="koleksi-auto-v1";
-const seed=[["Ducky","🐥",48],["Foxy","🦊",22],["Robo","🤖",205],["Draco","🐲",150],["Panda","🐼",280]].map(([n,e,h],i)=>({id:"s"+i,n,e,u:"https://example.com",th:theme({h,s:.9,l:.58})}));
+const seed=[["Ducky","🐥"],["Foxy","🦊"],["Robo","🤖"],["Draco","🐲"],["Panda","🐼"]].map(([n,e],i)=>({id:"s"+i,n,e,u:"https://example.com"}));
 let all=rd(KEY,seed),autoLinks=rd(AK,[]);
 const save=()=>wr(KEY,all);
 
 const card=(d,i,n)=>{
-  const p=String(i+1).padStart(4,"0"),t=d.th||theme({h:hue(d.n),s:.85,l:.58});
-  return `<a class="card" style="--c:${esc(t.c)};--c2:${esc(t.c2)};--c3:${esc(t.c3)};--ink:${esc(t.ink)}" href="${esc(safe(d.u))}" target="_blank" rel="noopener" draggable="false" aria-label="${esc(d.n)}"><div class="in"><div class="lvl"><span class="bar"><i style="width:${Math.round((i+1)/n*100)}%"></i></span><b>LVL ${p}</b></div><div class="pic">${d.img?`<img src="${esc(d.img)}" alt="" draggable="false">`:`<span>${d.e||"🎴"}</span>`}</div><div class="meta"><span>KOLEKSI • #${p}</span><span>${i+1}/${n}</span></div><h3>${esc(d.n)}</h3><div class="foot"><div class="ics"><span class="ic"><svg><use href="#i-globe"/></svg></span><span class="ic"><svg><use href="#i-bar"/></svg></span><span class="ic"><svg><use href="#i-link"/></svg></span></div><span class="go"><svg><use href="#i-out"/></svg></span></div></div></a>`;
+  const p=String(i+1).padStart(4,"0");
+  return `<a class="card" href="${esc(safe(d.u))}" target="_blank" rel="noopener" draggable="false" aria-label="${esc(d.n)}"><div class="in"><div class="lvl"><span class="bar"><i style="width:${Math.round((i+1)/n*100)}%"></i></span><b>LVL ${p}</b></div><div class="pic">${d.img?`<img src="${esc(d.img)}" alt="" draggable="false">`:`<span>${d.e||"🎴"}</span>`}</div><div class="meta"><span>KOLEKSI • #${p}</span><span>${i+1}/${n}</span></div><h3>${esc(d.n)}</h3><div class="foot"><div class="ics"><span class="ic"><svg><use href="#i-globe"/></svg></span><span class="ic"><svg><use href="#i-bar"/></svg></span><span class="ic"><svg><use href="#i-link"/></svg></span></div><span class="go"><svg><use href="#i-out"/></svg></span></div></div></a>`;
 };
 
 /* Carousel */
@@ -400,18 +377,12 @@ $("#fA").onsubmit=e=>{
 };
 
 /* Tambah kartu */
-const dAdd=$("#dAdd");let img="",thP=null;
+const dAdd=$("#dAdd");let img="";
 const say=(t,err,el)=>{const m=$("#msg");m.textContent=t;m.classList.toggle("err",!!err);if(el)el.focus()};
 $("#add").onclick=()=>{dAdd.showModal();$("#nm").focus()};
 function setImg(src){
   img=src;$("#pv").src=src;$("#pv").hidden=false;$("#dt").hidden=true;
-  thP=new Promise(res=>{
-    const im=new Image();
-    im.onload=()=>{let h=null;try{h=dominant(im)}catch(_){}if(h)$("#drop").style.borderColor=theme(h).c;res(h)};
-    im.onerror=()=>res(null);
-    im.src=src;
-  });
-  say("Gambar siap. Warna kartu mengikuti gambar ini.");
+  say("Gambar siap.");
 }
 $("#file").onchange=e=>{
   const f=e.target.files[0];
@@ -432,20 +403,57 @@ $("#file").onchange=e=>{
   };
   r.readAsDataURL(f);
 };
-$("#form").onsubmit=async e=>{
+$("#form").onsubmit=e=>{
   e.preventDefault();
   const n=$("#nm").value.trim(),u=normUrl($("#ln").value);
   if(!n)return say("Nama wajib diisi.",1,$("#nm"));
   if(u==="")return say("Link tujuan wajib diisi.",1,$("#ln"));
   if(u===null)return say("Link tidak valid.",1,$("#ln"));
-  const h=img?await thP:null,th=theme(h||{h:hue(n),s:.85,l:.58});
-  all.push({id:"c"+Date.now(),n,u,img,th,e:"🎴"});
+  all.push({id:"c"+Date.now(),n,u,img,e:"🎴"});
   const ok=save(),idx=all.length-1;
   q.value="";setTimeout(()=>{applyFilter(idx);pos=Math.max(0,idx-1);kick()},matchMedia("(prefers-reduced-motion:reduce)").matches?0:240);
-  e.target.reset();img="";thP=null;$("#pv").hidden=true;$("#dt").hidden=false;$("#drop").style.borderColor="";
-  say("Warna kartu diambil dari gambar yang kamu pilih.");
+  e.target.reset();img="";$("#pv").hidden=true;$("#dt").hidden=false;$("#drop").style.borderColor="";
+  say("Pilih gambar, isi nama, dan link.");
   closeDlg(dAdd);
   toast(ok?"Kartu ditambahkan.":"Kartu ditambahkan, tapi gambarnya terlalu besar untuk disimpan permanen.",!ok);
+};
+
+/* Ekspor / impor data (kartu + link Auto) */
+const isSeed=d=>/^s\d$/.test(d.id);
+function cleanCard(d){
+  if(!d||typeof d.n!=="string")return null;
+  const u=typeof d.u==="string"?normUrl(d.u):null;
+  if(!u)return null;
+  const o={id:typeof d.id==="string"&&d.id?d.id.slice(0,40):"c"+Date.now()+Math.random().toString(36).slice(2,6),n:d.n.slice(0,40),u,e:typeof d.e==="string"?d.e.slice(0,8):"🎴"};
+  if(typeof d.img==="string"&&/^data:image\//.test(d.img))o.img=d.img;
+  return o;
+}
+$("#exp").onclick=()=>{
+  const url=URL.createObjectURL(new Blob([JSON.stringify({app:"koleksi-kartu",v:1,cards:all,auto:autoLinks})],{type:"application/json"}));
+  const a=document.createElement("a");
+  a.href=url;a.download="koleksi-kartu.json";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast(`${all.length} kartu dan ${autoLinks.length} link Auto diekspor.`);
+};
+$("#imp").onclick=()=>$("#impFile").click();
+$("#impFile").onchange=async e=>{
+  const f=e.target.files[0];
+  e.target.value="";
+  if(!f)return;
+  try{
+    const j=JSON.parse(await f.text()),raw=Array.isArray(j)?j:j.cards;
+    if(!Array.isArray(raw))throw 0;
+    const imp=raw.map(cleanCard).filter(Boolean);
+    const links=(Array.isArray(j.auto)?j.auto:[]).map(u=>typeof u==="string"?normUrl(u):"").filter(Boolean);
+    const base=all.every(isSeed)?[]:all,ids=new Set(base.map(d=>d.id)),add=imp.filter(d=>!ids.has(d.id));
+    all=base.concat(add);
+    const ok=save();
+    autoLinks=[...new Set([...autoLinks,...links])];wr(AK,autoLinks);led();
+    q.value="";applyFilter();
+    closeDlg(dAdd);
+    toast(ok?`${add.length} kartu diimpor, ${links.length} link Auto digabung.`:"Data masuk, tapi terlalu besar untuk disimpan permanen.",!ok);
+  }catch(_){say("File tidak dikenali. Pakai file hasil Ekspor data.",1)}
 };
 
 led();applyFilter();
